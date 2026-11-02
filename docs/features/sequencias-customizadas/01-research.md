@@ -1,8 +1,7 @@
 # Pesquisa — Sequências de Acordes Customizadas
 
-> Preencha esta fase antes de propor qualquer solução. O objetivo é investigar as
-> perguntas abaixo com evidência real (código, dados, testes rápidos que você mesmo
-> rodou), não chutar. Apague este bloco de instruções antes de entregar.
+Fontes: `research/01-matching-semantica.md`, `research/02-validacao-hipotese.md`,
+`research/03-banco-de-dados.md`, `research/04-frontend-porsequencia.md`.
 
 ## Perguntas que você precisa responder
 
@@ -34,11 +33,45 @@
 
 ## Registro das descobertas
 
-[Para cada pergunta acima: o que você encontrou, com referência de onde (arquivo,
-linha, documentação, teste que você rodou).]
+1. **Matching.** Hoje o match não é calculado em tempo real: `/similares?sequencia=`
+   tira as vírgulas, faz lookup exato num dicionário de 6 chaves (`main.py:40-45`,
+   `main.py:190-197`) e devolve as músicas cujo `seqs_famosas` contém o índice
+   (`main.py:203-223`). A tag vem de `get_famosas`
+   (`scripts/generate_data_set.py:7-24`): bloco contíguo, sem diferenciar
+   maiúsculas de minúsculas, e vocabulário da música ⊆ vocabulário da sequência.
+   A ordem importa; repetição não. No runtime não há normalização de acordes
+   (`limpa_cifra` só tira tablatura e espaços, `main.py:11-23`). O que existe para
+   calcular ao vivo é `musica.cifra` (lista ordenada, com repetição) e
+   `musica.acordes` (conjunto) (`musica.py:16-17`).
+
+2. **Validação.** `get_famosas` e o predicado “contígua ∧ subconjunto” reproduzem
+   exatamente as 6 tags, música a música: 199, 296, 4, 5, 7 e 3 (total 514).
+   Contígua sozinha, subsequência ordenada, só subconjunto e qualquer interseção
+   não reproduzem. O endpoint devolve os mesmos conjuntos; a ordem das páginas
+   varia com `PYTHONHASHSEED`. O baseline observável é o conjunto por sequência.
+
+3. **Banco.** Não há banco: o CSV é lido uma vez no import (`main.py:49-98`). Na
+   imagem `python:3.9-slim` já estão o módulo `sqlite3` (SQLite 3.46.1, sem o
+   binário `sqlite3`), `dbm`/`shelve` e JSON/CSV/pickle; nenhum é usado. O
+   `Dockerfile` não tem `VOLUME` e o `docker run` do README não tem `-v`.
+   `stop`/`start` do mesmo container preserva a camada gravável; `rm` + novo
+   `run` não. PostgreSQL, MySQL, Redis e MongoDB exigem serviço externo.
+
+4. **Frontend.** `#/porsequencia` tem 4 cartões hardcoded (`Bm G D A`, `C G Am F`,
+   `Gm F`, `C C7 F Fm`); faltam `EmG` e `CA7DmG7`. Não há cadastro, persistência,
+   sequência na URL nem paginação: a busca vai sem `pagina` e mostra no máximo a
+   primeira página (100), reordenada no cliente por `-popularidade`. O seletor de
+   gênero usa a constante `GENEROS` (51 itens), não `/generos` (52; falta `R&B;`).
 
 ## Trade-offs identificados
 
-[Opções reais que você considerou para cada decisão (algoritmo, banco, frontend) e
-os prós/contras de cada uma. Isso alimenta a fase de proposta — não decida ainda
-aqui.]
+**Algoritmo.** “Contígua ∧ subconjunto” é o único predicado medido que reproduz as
+6 tags. Contígua sozinha, subsequência, só subconjunto e interseção devolvem de
+cerca de 4× a centenas de vezes mais músicas. A ordem da resposta não é estável
+entre processos.
+
+**Banco.** `sqlite3`, `dbm`/`shelve` e JSON/CSV/pickle não pedem dependência nova
+nem mudança obrigatória no `Dockerfile`; o arquivo na camada gravável sobrevive a
+`stop`/`start` e se perde em `rm`, salvo `VOLUME` ou `-v`. Memória (o estado
+atual) não persiste entre reinícios do processo. Serviço externo pede driver,
+segundo container, rede e volume próprio.

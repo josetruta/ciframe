@@ -6,9 +6,10 @@ similar songs. Full description: [README.md](README.md).
 
 ## Stack
 
-- Backend: Python 3.9, Flask 3.1, gunicorn. Single file (`main.py`) that
-  loads `data/top/dataset_final.csv` into memory once at startup — there is
-  no database.
+- Backend: Python 3.9, Flask 3.1, gunicorn. `main.py` loads
+  `data/top/dataset_final.csv` into memory once at startup; songs and genres
+  have no database. The custom sequence catalog is stored in SQLite at
+  `db/sequences.db` (mounted at `/app/db` in Docker).
 - Frontend: AngularJS 1.4.9 + jQuery, loaded from CDN in `static/index.html`,
   no build step. Legacy, and there's no plan to modernize the stack itself —
   but touching it is no longer off-limits when a task needs it; see
@@ -21,7 +22,7 @@ Docker (matches how the app actually ships):
 
 ```
 docker build -t ciframe .
-docker run -p 8080:8080 ciframe
+docker run -p 8080:8080 -v ciframe-db:/app/db ciframe
 ```
 
 Or a plain virtualenv:
@@ -36,12 +37,14 @@ python main.py        # serves on :5000 instead of :8080
 
 ```
 curl http://localhost:8080/generos
+curl http://localhost:8080/sequencias
 ```
 
-Done when this returns a JSON array of genre names (e.g. `["Rock", "Samba", ...]`), not an error page. If it hangs on startup, it's still parsing the CSV — give it a few seconds.
+Done when `/generos` returns a JSON array of genre names (e.g. `["Rock", "Samba", ...]`) and `/sequencias` returns the six seeded sequences, not an error page. If it hangs on startup, it's still parsing the CSV — give it a few seconds.
 
 ## Gotchas
 
 - Editing `data/top/*.csv` requires a restart: it's read once at import time, not per-request.
+- The sequence catalog lives in `db/sequences.db` locally and `/app/db/sequences.db` in Docker. Mount `/app/db` (`-v ciframe-db:/app/db`); without the volume, `docker rm` loses the catalog.
 - Every endpoint returns `json.dumps(...)` as a plain string, not `jsonify` — responses come back `Content-Type: text/html`. This is intentional legacy behavior; changing it is a real API change, not a cleanup.
 - Check `docs/adr/` before changing the deploy setup — it has a documented reason for its current state.
